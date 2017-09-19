@@ -16,6 +16,9 @@
 
 namespace http = boost::beast::http;
 
+namespace detail
+{
+
 class Registry
 {
     using Handler = std::function<http::response<http::string_body>(http::request<http::string_body>)>;
@@ -52,6 +55,8 @@ private:
     std::vector<Entry> resource_table;
 };
 
+}
+
 http::response<http::string_body> make_response(
     http::request<http::string_body> request,
     std::string message)
@@ -64,7 +69,6 @@ http::response<http::string_body> make_response(
     res.keep_alive(request.keep_alive());
     return res;
 }
-
 
 class HttpServer
 {
@@ -124,19 +128,6 @@ private:
     handle_request(
         http::request<http::string_body>&& req)
     {
-        // Returns a bad request response
-        auto const bad_request =
-        [&req](boost::beast::string_view why)
-        {
-            http::response<http::string_body> res{http::status::bad_request, req.version};
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "text/html");
-            res.keep_alive(req.keep_alive());
-            res.body = why.to_string();
-            res.prepare_payload();
-            return res;
-        };
-
         // Returns a not found response
         auto const not_found =
         [&req](boost::beast::string_view target)
@@ -165,7 +156,7 @@ private:
 
         try {
             return registry.get(req.method(), req.target())(req);
-        } catch(const Registry::NotFound&) {
+        } catch(const detail::Registry::NotFound&) {
             return not_found(req.target());
         } catch(const std::exception& e) {
             return server_error(e.what());
@@ -264,5 +255,5 @@ private:
 
     boost::asio::io_service ios;
     std::vector<std::thread> threads;
-    Registry registry;
+    detail::Registry registry;
 };
