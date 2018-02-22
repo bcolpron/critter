@@ -1,4 +1,7 @@
 #pragma once
+
+#define BOOST_COROUTINES_NO_DEPRECATION_WARNING
+
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
@@ -62,7 +65,7 @@ http::response<http::string_body> make_response(
     std::string message)
 {
     http::response<http::string_body> res;
-    res.body = std::move(message);
+    res.body() = std::move(message);
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
     res.set(http::field::content_type, "text/plain");
     res.prepare_payload();
@@ -132,11 +135,11 @@ private:
         auto const not_found =
         [&req](boost::beast::string_view target)
         {
-            http::response<http::string_body> res{http::status::not_found, req.version};
+            http::response<http::string_body> res{http::status::not_found, req.version()};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
             res.set(http::field::content_type, "text/html");
             res.keep_alive(req.keep_alive());
-            res.body = "The resource '" + target.to_string() + "' was not found.";
+            res.body() = "The resource '" + target.to_string() + "' was not found.";
             res.prepare_payload();
             return res;
         };
@@ -145,11 +148,11 @@ private:
         auto const server_error =
         [&req](boost::beast::string_view what)
         {
-            http::response<http::string_body> res{http::status::internal_server_error, req.version};
+            http::response<http::string_body> res{http::status::internal_server_error, req.version()};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
             res.set(http::field::content_type, "text/html");
             res.keep_alive(req.keep_alive());
-            res.body = "An error occurred: '" + what.to_string() + "'";
+            res.body() = "An error occurred: '" + what.to_string() + "'";
             res.prepare_payload();
             return res;
         };
@@ -200,7 +203,7 @@ private:
 
             lambda(std::move(response));
 
-            if(ec == http::error::end_of_stream)
+            //if(ec == http::error::end_of_stream)
             {
                 // This means we should close the connection, usually because
                 // the response indicated the "Connection: close" semantic.
