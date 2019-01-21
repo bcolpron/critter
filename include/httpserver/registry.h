@@ -10,9 +10,11 @@ namespace http = boost::beast::http;
 namespace detail
 {
 
+using HttpHandler = std::function<http::response<http::string_body>(http::request<http::string_body>&&)>;
+
+template<class Handler>
 class Registry
 {
-    using Handler = std::function<http::response<http::string_body>(http::request<http::string_body>)>;
     using Entry = std::tuple<http::verb, std::regex, Handler>;
 public:
 

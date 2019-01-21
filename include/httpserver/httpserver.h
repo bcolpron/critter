@@ -3,6 +3,7 @@
 #define BOOST_COROUTINES_NO_DEPRECATION_WARNING
 
 #include "registry.h"
+#include "serve_files_handler.h"
 #include <boost/beast/version.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
@@ -55,10 +56,26 @@ public:
         std::for_each(begin(threads), end(threads), [](auto& t) {t.join();});
     }
 
-    template<class F>
-    void add_handler(http::verb v, boost::beast::string_view uri_regex, F&& f)
+    void serve_files(std::string base_uri, boost::beast::string_view local_path)
     {
-        registry.add(v, uri_regex, std::move(f));
+        if(base_uri.back() != '/') base_uri += '/';
+        base_uri += ".*";
+        std::string path = local_path.to_string();
+        http_registry_.add(http::verb::get, base_uri,
+            [path](http::request<http::string_body>&& req) -> http::response<http::string_body> {
+                return serve_file_from(path, std::move(req));
+            });
+    }
+
+    template<class F>
+    void add_http_handler(http::verb v, boost::beast::string_view uri_regex, F&& f)
+    {
+        http_registry_.add(v, uri_regex, std::move(f));
+    }
+
+    void add_ws_handler(boost::beast::string_view uri_regex)
+    {
+
     }
 
     void start(unsigned nb_threads=1)
@@ -115,8 +132,8 @@ private:
         };
 
         try {
-            return registry.get(req.method(), req.target())(req);
-        } catch(const detail::Registry::NotFound&) {
+            return http_registry_.get(req.method(), req.target())(std::move(req));
+        } catch(const detail::Registry<detail::HttpHandler>::NotFound&) {
             return not_found(req.target());
         } catch(const std::exception& e) {
             return server_error(e.what());
@@ -138,13 +155,6 @@ private:
         // This buffer is required to persist across reads
         boost::beast::flat_buffer buffer;
 
-        // This lambda is used to send messages
-        auto lambda = [&socket, &ec, yield](http::response<http::string_body>&& msg)
-        {
-            http::serializer<false, http::string_body> sr{msg};
-            http::async_write(socket, sr, yield[ec]);
-        };
-        
         for(;;)
         {
             // Read a request
@@ -155,19 +165,19 @@ private:
             if(ec)
                 return fail(ec, "read");
 
-            // Send the response
             auto response = handle_request(std::move(req));
 
-            lambda(std::move(response));
+            // Send the response
+            http::serializer<false, http::string_body> sr{response};
+            http::async_write(socket, sr, yield[ec]);
 
-            //if(ec == http::error::end_of_stream)
+            if(ec) return fail(ec, "write");
+            if(!response.keep_alive())
             {
                 // This means we should close the connection, usually because
                 // the response indicated the "Connection: close" semantic.
                 break;
             }
-            if(ec)
-                return fail(ec, "write");
         }
         socket.shutdown(tcp::socket::shutdown_send, ec);
     }
@@ -215,5 +225,5 @@ private:
 
     boost::asio::io_service ios;
     std::vector<std::thread> threads;
-    detail::Registry registry;
+    detail::Registry<detail::HttpHandler> http_registry_;
 };
