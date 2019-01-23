@@ -58,12 +58,12 @@ public:
 
     void serve_files(std::string base_uri, boost::beast::string_view local_path)
     {
-        if(base_uri.back() != '/') base_uri += '/';
-        base_uri += ".*";
+        if(base_uri.back() == '/') base_uri.resize(base_uri.size() - 1);
+        base_uri += "(/.*)";
         std::string path = local_path.to_string();
         http_registry_.add(http::verb::get, base_uri,
-            [path](http::request<http::string_body>&& req) -> http::response<http::string_body> {
-                return serve_file_from(path, std::move(req));
+            [=](http::request<http::string_body>&& req) -> http::response<http::string_body> {
+                return serve_file_from(path, base_uri, std::move(req));
             });
     }
 

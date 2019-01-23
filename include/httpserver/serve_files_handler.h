@@ -22,6 +22,7 @@
 #include <string>
 #include <thread>
 #include <fstream>
+#include <regex>
 
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 namespace http = boost::beast::http;    // from <boost/beast/http.hpp>
@@ -97,6 +98,7 @@ path_cat(
 http::response<http::string_body>
 serve_file_from(
     boost::beast::string_view doc_root,
+    boost::beast::string_view uri_regex,
     http::request<http::string_body>&& req)
 {
     // Returns a bad request response
@@ -150,7 +152,13 @@ serve_file_from(
         return bad_request("Illegal request-target");
 
     // Build the path to the requested file
-    std::string path = path_cat(doc_root, req.target());
+    std::regex regex(uri_regex.begin(), uri_regex.end());
+    std::cmatch m;
+    if (!std::regex_match(req.target().begin(), req.target().end(), m, regex)
+        || m.size() != 2) {
+        return bad_request("Illegal target");
+    }
+    std::string path = path_cat(doc_root, boost::beast::string_view(m[1].first, m[1].length()));
     if(req.target().back() == '/')
         path.append("index.html");
 
