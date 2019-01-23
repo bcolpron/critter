@@ -4,6 +4,7 @@
 #include <vector>
 #include <tuple>
 #include <regex>
+#include <variant>
 
 namespace http = boost::beast::http;
 
@@ -11,10 +12,11 @@ namespace detail
 {
 
 using HttpHandler = std::function<http::response<http::string_body>(http::request<http::string_body>&&)>;
+struct WebSocketHandler {};
 
-template<class Handler>
 class Registry
 {
+    using Handler = std::variant<HttpHandler, WebSocketHandler>;
     using Entry = std::tuple<http::verb, std::regex, Handler>;
 public:
 

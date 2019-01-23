@@ -5,6 +5,7 @@
 #include "registry.h"
 #include "serve_files_handler.h"
 #include <boost/beast/version.hpp>
+#include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/config.hpp>
@@ -17,6 +18,7 @@
 #include <vector>
 
 namespace http = boost::beast::http;
+namespace websocket = boost::beast::websocket;
 
 http::response<http::string_body> make_response(
     http::request<http::string_body> request,
@@ -61,7 +63,7 @@ public:
         if(base_uri.back() == '/') base_uri.resize(base_uri.size() - 1);
         base_uri += "(/.*)";
         std::string path = local_path.to_string();
-        http_registry_.add(http::verb::get, base_uri,
+        registry_.add(http::verb::get, base_uri,
             [=](http::request<http::string_body>&& req) -> http::response<http::string_body> {
                 return serve_file_from(path, base_uri, std::move(req));
             });
@@ -70,12 +72,12 @@ public:
     template<class F>
     void add_http_handler(http::verb v, boost::beast::string_view uri_regex, F&& f)
     {
-        http_registry_.add(v, uri_regex, std::move(f));
+        registry_.add(v, uri_regex, std::move(f));
     }
 
     void add_ws_handler(boost::beast::string_view uri_regex)
     {
-
+        registry_.add(http::verb::get, uri_regex, detail::WebSocketHandler{});
     }
 
     void start(unsigned nb_threads=1)
@@ -101,45 +103,29 @@ public:
 
 private:
 
-    http::response<http::string_body>
-    handle_request(
-        http::request<http::string_body>&& req)
+    // Returns a not found response
+    auto not_found(http::request<http::string_body>& req)
     {
-        // Returns a not found response
-        auto const not_found =
-        [&req](boost::beast::string_view target)
-        {
-            http::response<http::string_body> res{http::status::not_found, req.version()};
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "text/html");
-            res.keep_alive(req.keep_alive());
-            res.body() = "The resource '" + target.to_string() + "' was not found.";
-            res.prepare_payload();
-            return res;
-        };
+        http::response<http::string_body> res{http::status::not_found, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "text/html");
+        res.keep_alive(req.keep_alive());
+        res.body() = "The resource '" + req.target().to_string() + "' was not found.";
+        res.prepare_payload();
+        return res;
+    };
 
-        // Returns a server error response
-        auto const server_error =
-        [&req](boost::beast::string_view what)
-        {
-            http::response<http::string_body> res{http::status::internal_server_error, req.version()};
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "text/html");
-            res.keep_alive(req.keep_alive());
-            res.body() = "An error occurred: '" + what.to_string() + "'";
-            res.prepare_payload();
-            return res;
-        };
-
-        try {
-            return http_registry_.get(req.method(), req.target())(std::move(req));
-        } catch(const detail::Registry<detail::HttpHandler>::NotFound&) {
-            return not_found(req.target());
-        } catch(const std::exception& e) {
-            return server_error(e.what());
-        }
-
-    }
+    // Returns a server error response
+    auto server_error(http::request<http::string_body>& req, boost::beast::string_view what)
+    {
+        http::response<http::string_body> res{http::status::internal_server_error, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "text/html");
+        res.keep_alive(req.keep_alive());
+        res.body() = "An error occurred: '" + what.to_string() + "'";
+        res.prepare_payload();
+        return res;
+    };
 
     void fail(boost::system::error_code ec, char const* what)
     {
@@ -165,12 +151,28 @@ private:
             if(ec)
                 return fail(ec, "read");
 
-            auto response = handle_request(std::move(req));
+            http::response<http::string_body> response;
+            try
+            {
+                auto handler = registry_.get(req.method(), req.target());
+                if(websocket::is_upgrade(req))
+                {
+                    std::cout << "websocket!" << std::endl;
+                    return;
+                }
+                else
+                {
+                    response = std::get<detail::HttpHandler>(handler)(std::move(req));
+                }
+            } catch(const detail::Registry::NotFound&) {
+                response = not_found(req);
+            } catch(const std::exception& e) {
+                response = server_error(req, e.what());
+            }
 
             // Send the response
             http::serializer<false, http::string_body> sr{response};
             http::async_write(socket, sr, yield[ec]);
-
             if(ec) return fail(ec, "write");
             if(!response.keep_alive())
             {
@@ -225,5 +227,5 @@ private:
 
     boost::asio::io_service ios;
     std::vector<std::thread> threads;
-    detail::Registry<detail::HttpHandler> http_registry_;
+    detail::Registry registry_;
 };
