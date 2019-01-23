@@ -4,6 +4,7 @@
 
 #include "registry.h"
 #include "serve_files_handler.h"
+#include "websocket_session.h"
 #include <boost/beast/version.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -157,7 +158,7 @@ private:
                 auto handler = registry_.get(req.method(), req.target());
                 if(websocket::is_upgrade(req))
                 {
-                    std::cout << "websocket!" << std::endl;
+                    std::make_shared<WebSocketSession>(std::move(socket))->run(std::move(req), yield);
                     return;
                 }
                 else
