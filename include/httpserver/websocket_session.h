@@ -5,15 +5,42 @@
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
 
+class WebSocketSession;
+
+using MessageHandler = std::function<void(std::string_view, WebSocketSession&)>;
+
 class WebSocketSession : public std::enable_shared_from_this<WebSocketSession>
 {
-    websocket::stream<tcp::socket> ws_;
 public:
     // Take ownership of the socket
     explicit
     WebSocketSession(tcp::socket socket)
         : ws_(std::move(socket))
     {
+    }
+
+    void send(std::string_view msg)
+    {
+        boost::beast::multi_buffer buffer;
+        boost::beast::ostream(buffer) << msg;
+        ws_.text(true);
+        ws_.write(buffer.data());
+    }
+
+private:
+
+    friend class HttpServer;
+
+    websocket::stream<tcp::socket> ws_;
+
+    MessageHandler on_message_ = [](std::string_view msg, WebSocketSession& session) {
+        std::cout << msg << std::endl;
+        session.send(msg);
+    };
+
+    void fail(boost::system::error_code ec, char const* what)
+    {
+        std::cerr << what << ": " << ec.message() << "\n";
     }
 
     template<class Body, class Allocator>
@@ -45,17 +72,8 @@ public:
             ws_.async_read(buffer, yield[ec]);
             if(ec)
                 return fail(ec, "read");
-            
-            // Echo the message
-            ws_.text(ws_.got_text());
-            ws_.async_write(buffer.data(), yield[ec]);
-            if(ec)
-                return fail(ec, "write");
-        }
-    }
 
-    void fail(boost::system::error_code ec, char const* what)
-    {
-        std::cerr << what << ": " << ec.message() << "\n";
+            on_message_(boost::beast::buffers_to_string(buffer.data()), *this);
+        }
     }
 };
