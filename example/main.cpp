@@ -4,11 +4,14 @@ int main(int, const char**)
 {
     HttpServer server(8888);
     server.serve_files("/static/", "./www/");
-    server.add_http_handler(http::verb::get, "/test/?", [](http::request<http::string_body>&& req) -> http::response<http::string_body>
+    server.add_http_handler(http::verb::get, "/test/?", [](auto&& req)
     {
         return make_response(req, "Hello\n");
     });
-    server.add_ws_handler("/ws/?");
+    detail::WebSocketHandler a;
+    server.add_ws_handler("/ws/?", [](auto msg, auto& session) {
+        std::cout << msg << std::endl;
+    });
 
     std::cout << "Server started" << std::endl; 
     server.run();

@@ -8,11 +8,13 @@
 
 namespace http = boost::beast::http;
 
+class WebSocketSession;
+
 namespace detail
 {
 
 using HttpHandler = std::function<http::response<http::string_body>(http::request<http::string_body>&&)>;
-struct WebSocketHandler {};
+using WebSocketHandler = std::function<void(std::string_view, WebSocketSession&)>;
 
 class Registry
 {

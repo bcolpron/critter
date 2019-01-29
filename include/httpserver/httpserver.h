@@ -70,15 +70,14 @@ public:
             });
     }
 
-    template<class F>
-    void add_http_handler(http::verb v, boost::beast::string_view uri_regex, F&& f)
+    void add_http_handler(http::verb v, boost::beast::string_view uri_regex, detail::HttpHandler f)
     {
         registry_.add(v, uri_regex, std::move(f));
     }
 
-    void add_ws_handler(boost::beast::string_view uri_regex)
+    void add_ws_handler(boost::beast::string_view uri_regex, detail::WebSocketHandler f)
     {
-        registry_.add(http::verb::get, uri_regex, detail::WebSocketHandler{});
+        registry_.add(http::verb::get, uri_regex, std::move(f));
     }
 
     void start(unsigned nb_threads=1)
@@ -158,7 +157,9 @@ private:
                 auto handler = registry_.get(req.method(), req.target());
                 if(websocket::is_upgrade(req))
                 {
-                    std::make_shared<WebSocketSession>(std::move(socket))->run(std::move(req), yield);
+                    std::make_shared<WebSocketSession>(std::move(socket),
+                            std::get<detail::WebSocketHandler>(handler))
+                        ->run(std::move(req), yield);
                     return;
                 }
                 else

@@ -7,15 +7,12 @@ namespace websocket = boost::beast::websocket;
 
 class WebSocketSession;
 
-using MessageHandler = std::function<void(std::string_view, WebSocketSession&)>;
-
 class WebSocketSession : public std::enable_shared_from_this<WebSocketSession>
 {
 public:
-    // Take ownership of the socket
-    explicit
-    WebSocketSession(tcp::socket socket)
-        : ws_(std::move(socket))
+    template<class F>
+    WebSocketSession(tcp::socket socket, F f)
+        : ws_(std::move(socket)), on_message_(std::move(f))
     {
     }
 
@@ -29,14 +26,11 @@ public:
 
 private:
 
+    using MessageHandler = std::function<void(std::string_view, WebSocketSession&)>;
     friend class HttpServer;
 
     websocket::stream<tcp::socket> ws_;
-
-    MessageHandler on_message_ = [](std::string_view msg, WebSocketSession& session) {
-        std::cout << msg << std::endl;
-        session.send(msg);
-    };
+    MessageHandler on_message_;
 
     void fail(boost::system::error_code ec, char const* what)
     {
