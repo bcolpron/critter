@@ -8,8 +8,7 @@ int main(int, const char**)
     {
         return make_response(req, "Hello\n");
     });
-    detail::WebSocketHandler a;
-    server.add_ws_handler("/ws/?", [](auto msg, auto& session) {
+    server.add_ws_handler("/ws(/.*)?", [](auto msg, auto& session) {
         std::cout << msg << std::endl;
     });
 
