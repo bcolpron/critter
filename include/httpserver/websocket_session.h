@@ -7,6 +7,7 @@ namespace websocket = boost::beast::websocket;
 
 class WebSocketSession
 {
+public:
     virtual void send(std::string_view msg)=0;
 };
 

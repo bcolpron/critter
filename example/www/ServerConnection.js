@@ -2,7 +2,7 @@ function ServerConnection(url) {
     this.url = url;
     this.closing = false;
     this._onConnectCallback = function() {};
-    this._onMessageCallback = function(event) {console.log("message from server: " + event.data);};
+    this._onMessageCallback = function(msg) {console.log("message from server: " + msg);};
     this.connect();
 }
 
@@ -21,6 +21,10 @@ ServerConnection.prototype._onopen = function() {
     this._onConnectCallback();
 }
 
+ServerConnection.prototype._onmessage = function(event) {
+    this._onMessageCallback(event.data);
+}
+
 ServerConnection.prototype.onConnect = function(callback) {
     this._onConnectCallback = callback;
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
@@ -29,7 +33,7 @@ ServerConnection.prototype.onConnect = function(callback) {
 }
 
 ServerConnection.prototype.onMessage = function(callback) {
-    this._onMessageCallback = function(event) {callbacl(event.data);};
+    this._onMessageCallback = callback;
 }
 
 ServerConnection.prototype.send = function(data) {

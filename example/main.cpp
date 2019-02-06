@@ -10,6 +10,7 @@ int main(int, const char**)
     });
     server.add_ws_handler("/ws(/.*)?", [](auto msg, auto& session) {
         std::cout << msg << std::endl;
+        session.send(msg);
     });
 
     std::cout << "Server started" << std::endl; 
