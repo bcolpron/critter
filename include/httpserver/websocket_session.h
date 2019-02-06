@@ -5,18 +5,21 @@
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
 
-class WebSocketSession;
+class WebSocketSession
+{
+    virtual void send(std::string_view msg)=0;
+};
 
-class WebSocketSession : public std::enable_shared_from_this<WebSocketSession>
+class WebSocketSessionImpl : public WebSocketSession, public std::enable_shared_from_this<WebSocketSessionImpl>
 {
 public:
     template<class F>
-    WebSocketSession(tcp::socket socket, F f)
+    WebSocketSessionImpl(tcp::socket socket, F f)
         : ws_(std::move(socket)), on_message_(std::move(f))
     {
     }
 
-    void send(std::string_view msg)
+    virtual void send(std::string_view msg) override
     {
         boost::beast::multi_buffer buffer;
         boost::beast::ostream(buffer) << msg;
@@ -37,20 +40,19 @@ private:
         std::cerr << what << ": " << ec.message() << "\n";
     }
 
-    template<class Body, class Allocator>
     void
-    run(http::request<Body, http::basic_fields<Allocator>> req,
+    run(http::request<http::string_body> req,
         boost::asio::yield_context yield)
     {
         // Accept the websocket handshake
         boost::system::error_code ec;
         ws_.async_accept(req, yield[ec]);
-        if(ec) fail(ec, "accept");
+        if(ec) throw std::system_error(ec, "ws accept failed");
 
         boost::asio::spawn(
             ws_.get_io_service(),
             std::bind(
-                &WebSocketSession::read, shared_from_this(),
+                &WebSocketSessionImpl::read, shared_from_this(),
                 std::placeholders::_1)); 
     }
 

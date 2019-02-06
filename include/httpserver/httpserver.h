@@ -157,7 +157,7 @@ private:
                 auto handler = registry_.get(req.method(), req.target());
                 if(websocket::is_upgrade(req))
                 {
-                    std::make_shared<WebSocketSession>(std::move(socket),
+                    std::make_shared<WebSocketSessionImpl>(std::move(socket),
                             std::get<detail::WebSocketHandler>(handler))
                         ->run(std::move(req), yield);
                     return;
