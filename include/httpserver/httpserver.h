@@ -9,10 +9,8 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
-#include <boost/config.hpp>
 #include <boost/system/system_error.hpp>
 #include <algorithm>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
