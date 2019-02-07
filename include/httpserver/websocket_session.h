@@ -28,19 +28,6 @@ public:
         ws_.write(buffer.data());
     }
 
-private:
-
-    using MessageHandler = std::function<void(std::string_view, WebSocketSession&)>;
-    friend class HttpServer;
-
-    websocket::stream<tcp::socket> ws_;
-    MessageHandler on_message_;
-
-    void fail(boost::system::error_code ec, char const* what)
-    {
-        std::cerr << what << ": " << ec.message() << "\n";
-    }
-
     void
     run(http::request<http::string_body> req,
         boost::asio::yield_context yield)
@@ -57,6 +44,26 @@ private:
                 std::placeholders::_1)); 
     }
 
+    template<class F>
+    void on_close(F&& f)
+    {
+        on_close_ = std::move(f);
+    }
+
+private:
+
+    using MessageHandler = std::function<void(std::string_view, WebSocketSession&)>;
+    using OnCloseHandler = std::function<void(std::shared_ptr<WebSocketSession>)>;
+
+    websocket::stream<tcp::socket> ws_;
+    MessageHandler on_message_;
+    OnCloseHandler on_close_ = [](auto){};
+
+    void fail(boost::system::error_code ec, char const* what)
+    {
+        std::cerr << what << ": " << ec.message() << "\n";
+    }
+
     void
     read(boost::asio::yield_context yield)
     {
@@ -67,8 +74,10 @@ private:
 
             // Read a message into our buffer
             ws_.async_read(buffer, yield[ec]);
-            if(ec)
+            if(ec) {
+                on_close_(shared_from_this());
                 return fail(ec, "read");
+            }
 
             on_message_(boost::beast::buffers_to_string(buffer.data()), *this);
         }

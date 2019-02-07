@@ -17,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <mutex>
 
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
@@ -38,6 +39,7 @@ class HttpServer
 {
     using tcp = boost::asio::ip::tcp;
 public:
+    using WebSocketSessions = std::vector<std::shared_ptr<WebSocketSession>>;
     using verb = http::verb;
 
     explicit HttpServer(unsigned short port=80)
@@ -89,6 +91,12 @@ public:
                 ios.run();
             });
         }
+    }
+
+    WebSocketSessions get_ws_sessions() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return ws_sessions_;
     }
 
     void run()
@@ -157,9 +165,14 @@ private:
                 auto handler = registry_.get(req.method(), req.target());
                 if(websocket::is_upgrade(req))
                 {
-                    std::make_shared<WebSocketSessionImpl>(std::move(socket),
-                            std::get<detail::WebSocketHandler>(handler))
-                        ->run(std::move(req), yield);
+                    auto session = std::make_shared<WebSocketSessionImpl>(std::move(socket),
+                            std::get<detail::WebSocketHandler>(handler));
+                    this->add(session);
+                    session->on_close([this](auto session) {
+                        this->remove(session);
+                    });
+                    session->run(std::move(req), yield);
+
                     return;
                 }
                 else
@@ -227,7 +240,22 @@ private:
         }
     }
 
+    void add(std::shared_ptr<WebSocketSession> session)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ws_sessions_.push_back(std::move(session));
+    }
+
+    void remove(const std::shared_ptr<WebSocketSession>& session)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ws_sessions_.erase(std::remove(ws_sessions_.begin(), ws_sessions_.end(), session),
+                           ws_sessions_.end());
+    }
+
     boost::asio::io_service ios;
     std::vector<std::thread> threads;
     detail::Registry registry_;
+    mutable std::mutex mutex_;
+    WebSocketSessions ws_sessions_;
 };
