@@ -42,7 +42,7 @@ public:
 
     explicit HttpServer(unsigned short port=80)
     {
-        auto const address = boost::asio::ip::address::from_string("0.0.0.0");
+        auto const address = boost::asio::ip::address::from_string("::");
 
         // Spawn a listening port
         boost::asio::spawn(ios,
@@ -143,8 +143,6 @@ private:
         boost::asio::yield_context yield)
     {
         boost::system::error_code ec;
-
-        // This buffer is required to persist across reads
         boost::beast::flat_buffer buffer;
 
         for(;;)
@@ -170,7 +168,6 @@ private:
                         this->remove(session);
                     });
                     session->run(std::move(req), yield);
-
                     return;
                 }
                 else
