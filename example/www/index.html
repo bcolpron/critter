@@ -1,35 +1,111 @@
 </html>
 <head>
 <title>Sample App</title>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+
+    <style type="text/css">
+    .container {
+        padding: 10px;
+    }
+    .card {
+        margin: 10px;
+    }
+    .btn {
+        float: right;
+    }
+    .circle {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background-color: green;
+        margin-right: 8px;
+        vertical-align: middle;
+        transition: all 2s;
+    }
+    .circle:hover {
+        opacity: 0;
+    }
+    .row {
+      display: flex;
+    }
+    .column {
+      flex: 50%;
+    }
+    </style>
 </head>
 <body>
 
-<div>
+<nav class="navbar navbar-expand-lg navbar-light bg-secondary">
+<a class="navbar-brand" href="#">Sample App</a>
+</nav>
+
+<div class=wrapper>
+
+<div class="container">
     <input type="text" id="input">
     <button class="msg-send">Send</button>
+    <span id="connectionStatus">Loading...</span>
 </div>
 
-<div>
-    <h2>Messages from Server</h2>
-    <ul id="messages"></ul>
+<div class="container" id="messages">
+
+<div class="card card-prototype" style="display: none">
+  <div class="card-header">
+    Message
+    <button type="button" class="close"><span>&times;</span></button>
+  </div>
+  <div class="card-body">
+    <p class="card-text"></p>
+  </div>
 </div>
 
-
+</div>
 
 </body>
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E=" crossorigin="anonymous"></script>
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.5/lodash.core.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
 <script src="ServerConnection.js"></script>
 <script>
 $(function(){
     var ws = new ServerConnection("ws://" + location.host + "/ws/");
     ws.onMessage(function(msg) {
         console.log("message: " + msg);
-        $("#messages").append($("<li>" + msg + "</li>"));
+
+        var card = $(".card-prototype").clone();
+        card.removeClass("card-prototype");
+        card.find(".card-text").text(msg);
+        $("#messages").prepend(card);
+        card.fadeIn();
+        console.log(card);
+    });
+    ws.onStateChange(function(state) {
+        function readyStateToText(stae) {
+            switch(state) {
+                case 0: return "connecting";
+                case 1: return "connected";
+                case 2: return "closing";
+                case 3: return "disconnected";
+                default: return "unknown";
+            }
+        };
+        $("#connectionStatus").text(readyStateToText(state));
     });
 
     $("button.msg-send").on("click", function(){
         ws.send($("#input").val());
+    })
+    $("body").on("click", "button.close", function(e){
+        var e = $(e.target).parent().parent().parent();
+        e.fadeOut("fast", function() {e.remove();});
+        console.log(e);
     })
 });
 </script>
