@@ -17,7 +17,6 @@ add_executable(${app_name} main.cpp)
 
 target_include_directories(${app_name} PRIVATE
     ${Boost_INCLUDE_DIRS}
-    ../../beast/include
     ../include
     include/
 )

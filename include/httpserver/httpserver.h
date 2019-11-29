@@ -45,10 +45,10 @@ public:
         auto const address = boost::asio::ip::address::from_string("::");
 
         // Spawn a listening port
-        boost::asio::spawn(ios,
+        boost::asio::spawn(ioc,
             std::bind(
                 &HttpServer::do_listen, this,
-                std::ref(ios),
+                std::ref(ioc),
                 tcp::endpoint{address, port},
                 std::placeholders::_1));
     }
@@ -86,7 +86,7 @@ public:
         {
             threads.emplace_back([&]
             {
-                ios.run();
+                ioc.run();
             });
         }
     }
@@ -99,12 +99,12 @@ public:
 
     void run()
     {
-        ios.run();
+        ioc.run();
     }
 
     void stop()
     {
-        ios.stop();
+        ioc.stop();
     }
 
 private:
@@ -195,14 +195,14 @@ private:
     }
 
     void do_listen(
-        boost::asio::io_service& ios,
+        boost::asio::io_context& ioc,
         tcp::endpoint endpoint,
         boost::asio::yield_context yield)
     {
         boost::system::error_code ec;
 
         // Open the acceptor
-        tcp::acceptor acceptor(ios);
+        tcp::acceptor acceptor(ioc);
         acceptor.open(endpoint.protocol(), ec);
         if(ec)
             throw boost::system::system_error(ec);
@@ -221,7 +221,7 @@ private:
 
         for(;;)
         {
-            tcp::socket socket(ios);
+            tcp::socket socket(ioc);
             acceptor.async_accept(socket, yield[ec]);
             if(ec)
                 fail(ec, "accept");
@@ -248,7 +248,7 @@ private:
                            ws_sessions_.end());
     }
 
-    boost::asio::io_service ios;
+    boost::asio::io_context ioc;
     std::vector<std::thread> threads;
     detail::Registry registry_;
     mutable std::mutex mutex_;
