@@ -1,0 +1,9 @@
+cmake_minimum_required (VERSION 3.1.0)
+
+include(GNUInstallDirs)
+set(CRITTER_INCLUDE_INSTALL_DIR "${CMAKE_INSTALL_INCLUDEDIR}")
+set(CRITTER_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include/")
+
+install(DIRECTORY ${CRITTER_INCLUDE_DIR} DESTINATION ${CRITTER_INCLUDE_INSTALL_DIR})
+
+add_subdirectory(example)

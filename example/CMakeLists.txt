@@ -1,8 +1,5 @@
 cmake_minimum_required (VERSION 3.1.0)
 
-set(app_name example)
-project (${app_name})
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3")
@@ -13,14 +10,13 @@ find_package(Boost 1.65.0 REQUIRED COMPONENTS system filesystem regex coroutine 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_executable(${app_name} main.cpp)
-
-target_include_directories(${app_name} PRIVATE
+include_directories(
     ${Boost_INCLUDE_DIRS}
     ../include
-    include/
 )
 
-target_link_libraries(${app_name} ${Boost_LIBRARIES})
-target_link_libraries(${app_name} Threads::Threads)
+link_libraries(${Boost_LIBRARIES})
+link_libraries(Threads::Threads)
+
+add_executable(example main.cpp)
 
