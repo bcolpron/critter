@@ -8,11 +8,10 @@
 
 namespace http = boost::beast::http;
 
-class WebSocketSession;
-
-namespace detail
+namespace critter::detail
 {
 
+class WebSocketSession;
 using HttpHandler = std::function<http::response<http::string_body>(http::request<http::string_body>&&)>;
 using WebSocketHandler = std::function<void(std::string_view, WebSocketSession&)>;
 

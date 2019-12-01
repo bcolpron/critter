@@ -2,9 +2,9 @@
 
 #define BOOST_COROUTINES_NO_DEPRECATION_WARNING
 
-#include "registry.h"
-#include "serve_files_handler.h"
-#include "websocket_session.h"
+#include "detail/registry.h"
+#include "detail/serve_files_handler.h"
+#include "detail/websocket_session.h"
 #include <boost/beast/version.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -16,6 +16,9 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+
+namespace critter
+{
 
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
@@ -33,27 +36,27 @@ http::response<http::string_body> make_response(
     return res;
 }
 
-class HttpServer
+class WebServer
 {
     using tcp = boost::asio::ip::tcp;
 public:
-    using WebSocketSessions = std::vector<std::shared_ptr<WebSocketSession>>;
+    using WebSocketSessions = std::vector<std::shared_ptr<detail::WebSocketSession>>;
     using verb = http::verb;
 
-    explicit HttpServer(unsigned short port=80)
+    explicit WebServer(unsigned short port=80)
     {
         auto const address = boost::asio::ip::address::from_string("::");
 
         // Spawn a listening port
         boost::asio::spawn(ioc,
             std::bind(
-                &HttpServer::do_listen, this,
+                &WebServer::do_listen, this,
                 std::ref(ioc),
                 tcp::endpoint{address, port},
                 std::placeholders::_1));
     }
 
-    ~HttpServer()
+    ~WebServer()
     {
         stop();
         std::for_each(begin(threads), end(threads), [](auto& t) {t.join();});
@@ -66,7 +69,7 @@ public:
         std::string path = local_path.to_string();
         registry_.add(http::verb::get, base_uri,
             [=](http::request<http::string_body>&& req) -> http::response<http::string_body> {
-                return serve_file_from(path, base_uri, std::move(req));
+                return detail::serve_file_from(path, base_uri, std::move(req));
             });
     }
 
@@ -161,7 +164,7 @@ private:
                 auto handler = registry_.get(req.method(), req.target());
                 if(websocket::is_upgrade(req))
                 {
-                    auto session = std::make_shared<WebSocketSessionImpl>(std::move(socket),
+                    auto session = std::make_shared<detail::WebSocketSessionImpl>(std::move(socket),
                             std::get<detail::WebSocketHandler>(handler));
                     this->add(session);
                     session->on_close([this](auto session) {
@@ -229,19 +232,19 @@ private:
                 boost::asio::spawn(
                     acceptor.get_io_service(),
                     std::bind(
-                        &HttpServer::do_session, this,
+                        &WebServer::do_session, this,
                         std::move(socket),
                         std::placeholders::_1));
         }
     }
 
-    void add(std::shared_ptr<WebSocketSession> session)
+    void add(std::shared_ptr<detail::WebSocketSession> session)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ws_sessions_.push_back(std::move(session));
     }
 
-    void remove(const std::shared_ptr<WebSocketSession>& session)
+    void remove(const std::shared_ptr<detail::WebSocketSession>& session)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ws_sessions_.erase(std::remove(ws_sessions_.begin(), ws_sessions_.end(), session),
@@ -254,3 +257,5 @@ private:
     mutable std::mutex mutex_;
     WebSocketSessions ws_sessions_;
 };
+
+}

@@ -2,6 +2,10 @@
 #include <boost/asio/spawn.hpp>
 #include <memory>
 
+
+namespace critter::detail
+{
+
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
 
@@ -83,3 +87,5 @@ private:
         }
     }
 };
+
+}
