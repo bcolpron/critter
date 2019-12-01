@@ -16,12 +16,24 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+#include <stdexcept>
 
 namespace critter
 {
 
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
+
+struct HttpException: std::runtime_error
+{
+    HttpException(http::status code, const std::string& message)
+    : std::runtime_error(message), code_(code) {}
+
+    http::status code() const { return code_; }
+private:
+    http::status code_;
+    std::string message;
+};
 
 http::response<http::string_body> make_response(
     http::request<http::string_body> request,
@@ -124,14 +136,14 @@ private:
         return res;
     };
 
-    // Returns a server error response
-    auto server_error(http::request<http::string_body>& req, boost::beast::string_view what)
+    // Returns an error response
+    auto exception_response(http::request<http::string_body>& req, const HttpException& e)
     {
-        http::response<http::string_body> res{http::status::internal_server_error, req.version()};
+        http::response<http::string_body> res{e.code(), req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
         res.set(http::field::content_type, "text/html");
         res.keep_alive(req.keep_alive());
-        res.body() = "An error occurred: '" + what.to_string() + "'";
+        res.body() = e.what();
         res.prepare_payload();
         return res;
     };
@@ -175,12 +187,20 @@ private:
                 }
                 else
                 {
-                    response = std::get<detail::HttpHandler>(handler)(std::move(req));
+                    try {
+                        response = std::get<detail::HttpHandler>(handler)(std::move(req));
+                    } catch (const HttpException&) {
+                        throw;
+                    } catch (const std::exception& e) {
+                        throw HttpException(http::status::internal_server_error, e.what());
+                    } catch (...) {
+                        throw HttpException(http::status::internal_server_error, "unhandled exception");
+                    }
                 }
             } catch(const detail::Registry::NotFound&) {
                 response = not_found(req);
-            } catch(const std::exception& e) {
-                response = server_error(req, e.what());
+            } catch(const HttpException& e) {
+                response = exception_response(req, e);
             }
 
             // Send the response
