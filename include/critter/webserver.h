@@ -5,7 +5,6 @@
 #include "detail/registry.h"
 #include "detail/serve_files_handler.h"
 #include "detail/websocket_session.h"
-#include <boost/beast/version.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
@@ -34,19 +33,6 @@ private:
     http::status code_;
     std::string message;
 };
-
-http::response<http::string_body> make_response(
-    http::request<http::string_body> request,
-    std::string message)
-{
-    http::response<http::string_body> res;
-    res.body() = std::move(message);
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, "text/plain");
-    res.prepare_payload();
-    res.keep_alive(request.keep_alive());
-    return res;
-}
 
 class WebServer
 {
@@ -85,9 +71,10 @@ public:
             });
     }
 
-    void add_http_handler(http::verb v, boost::beast::string_view uri_regex, detail::HttpHandler f)
+    template<class F>
+    void add_http_handler(http::verb v, boost::beast::string_view uri_regex, F&& f)
     {
-        registry_.add(v, uri_regex, std::move(f));
+        registry_.add(v, uri_regex, [f=std::move(f)] (auto&& r) {return detail::make_response(f(std::move(r)));});
     }
 
     void add_ws_handler(boost::beast::string_view uri_regex, detail::WebSocketHandler f)

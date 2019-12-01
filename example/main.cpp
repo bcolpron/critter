@@ -6,12 +6,12 @@ int main(int, const char**)
     server.serve_files("/static/", "./www/");
     server.add_http_handler(http::verb::get, "/test/?", [](auto&& req)
     {
-        return critter::make_response(req, "Hello\n");
+        return "Hello\n";
     });
     server.add_http_handler(http::verb::post, "/test/?", [](auto&& req)
     {
         std::cout << req.body() << std::endl;
-        return critter::make_response(req, "ok\n");
+        return "ok\n";
     });
     server.add_ws_handler("/ws(/.*)?", [&](auto msg, auto& session) {
         std::cout << msg << std::endl;
