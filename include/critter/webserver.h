@@ -34,6 +34,9 @@ private:
     std::string message;
 };
 
+using Request=http::request<http::string_body>;
+using Response=http::response<http::string_body>;
+
 class WebServer
 {
     using tcp = boost::asio::ip::tcp;

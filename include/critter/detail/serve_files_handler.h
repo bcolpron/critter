@@ -35,7 +35,7 @@ const auto MAX_FILE_SIZE = 4 * 1024 * 1024;
 //------------------------------------------------------------------------------
 
 // Return a reasonable mime type based on the extension of a file.
-boost::beast::string_view
+inline boost::beast::string_view
 mime_type(boost::beast::string_view path)
 {
     using boost::beast::iequals;
@@ -72,7 +72,7 @@ mime_type(boost::beast::string_view path)
 
 // Append an HTTP rel-path to a local filesystem path.
 // The returned path is normalized for the platform.
-std::string
+inline std::string
 path_cat(
     boost::beast::string_view base,
     boost::beast::string_view path)
@@ -98,7 +98,7 @@ path_cat(
 }
 
 // This function produces an HTTP response for the given request. 
-http::response<http::string_body>
+inline http::response<http::string_body>
 serve_file_from(
     boost::beast::string_view doc_root,
     boost::beast::string_view uri_regex,
