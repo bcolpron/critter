@@ -1,6 +1,7 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/spawn.hpp>
 #include <memory>
+#include <iostream>
 
 
 namespace critter::detail
