@@ -240,7 +240,7 @@ private:
                 fail(ec, "accept");
             else
                 boost::asio::spawn(
-                    acceptor.get_io_service(),
+                    acceptor.get_executor(),
                     std::bind(
                         &WebServer::do_session, this,
                         std::move(socket),

@@ -42,7 +42,7 @@ public:
         if(ec) throw std::system_error(ec, "ws accept failed");
 
         boost::asio::spawn(
-            ws_.get_executor().context(),
+            ws_.get_executor(),
             std::bind(
                 &WebSocketSessionImpl::read, shared_from_this(),
                 std::placeholders::_1)); 
