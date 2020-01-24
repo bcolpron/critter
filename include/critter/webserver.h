@@ -6,6 +6,7 @@
 #include "detail/serve_files_handler.h"
 #include "detail/websocket_session.h"
 #include <boost/beast/websocket.hpp>
+#include <boost/beast/ssl.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/system/system_error.hpp>
@@ -22,6 +23,7 @@ namespace critter
 
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
+namespace ssl = boost::asio::ssl;
 
 struct HttpException: std::runtime_error
 {
@@ -37,6 +39,12 @@ private:
 using Request=http::request<http::string_body>;
 using Response=http::response<http::string_body>;
 
+struct SslOptions
+{
+    std::string certificate_file_path;
+    std::string key_file_path;
+};
+
 class WebServer
 {
     using tcp = boost::asio::ip::tcp;
@@ -44,14 +52,42 @@ public:
     using WebSocketSessions = std::vector<std::shared_ptr<detail::WebSocketSession>>;
     using verb = http::verb;
 
-    explicit WebServer(unsigned short port=80)
+    WebServer() {}
+
+    explicit WebServer(unsigned short port)
+    {
+        listen(port);
+    }
+
+    WebServer(const SslOptions& sslOptions, unsigned short port)
+    {
+        listen(sslOptions, port);
+    }
+
+    void listen(unsigned short port=80)
     {
         auto const address = boost::asio::ip::address::from_string("::");
-
-        // Spawn a listening port
         boost::asio::spawn(ioc,
             std::bind(
-                &WebServer::do_listen, this,
+                &WebServer::do_listen<boost::beast::tcp_stream>, this,
+                std::ref(ioc),
+                tcp::endpoint{address, port},
+                std::placeholders::_1));
+    }
+
+    void listen(const SslOptions& options, unsigned short port=443)
+    {
+        ctx.set_options(
+            boost::asio::ssl::context::default_workarounds |
+            boost::asio::ssl::context::no_sslv2 |
+            boost::asio::ssl::context::single_dh_use);
+        ctx.use_certificate_file(options.certificate_file_path, boost::asio::ssl::context_base::pem);
+        ctx.use_private_key_file(options.key_file_path, boost::asio::ssl::context_base::pem);
+
+        auto const address = boost::asio::ip::address::from_string("::");
+        boost::asio::spawn(ioc,
+            std::bind(
+                &WebServer::do_listen<boost::beast::ssl_stream<boost::beast::tcp_stream>>, this,
                 std::ref(ioc),
                 tcp::endpoint{address, port},
                 std::placeholders::_1));
@@ -143,18 +179,27 @@ private:
         std::cerr << what << ": " << ec.message() << std::endl;
     }
 
+    template<class StreamClass>
     void do_session(
-        tcp::socket& socket,
+        StreamClass& stream,
         boost::asio::yield_context yield)
     {
         boost::system::error_code ec;
         boost::beast::flat_buffer buffer;
 
+        if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<boost::beast::tcp_stream>>)
+        {
+            // Perform the SSL handshake
+            stream.async_handshake(ssl::stream_base::server, yield[ec]);
+            if(ec)
+                return fail(ec, "handshake");
+        }
+
         for(;;)
         {
             // Read a request
             http::request<http::string_body> req;
-            http::async_read(socket, buffer, req, yield[ec]);
+            http::async_read(stream, buffer, req, yield[ec]);
             if(ec == http::error::end_of_stream)
                 break;
             if(ec)
@@ -166,7 +211,7 @@ private:
                 auto handler = registry_.get(req.method(), req.target());
                 if(websocket::is_upgrade(req))
                 {
-                    auto session = std::make_shared<detail::WebSocketSessionImpl>(std::move(socket),
+                    auto session = std::make_shared<detail::WebSocketSessionImpl<StreamClass>>(std::move(stream),
                             std::get<detail::WebSocketHandler>(handler));
                     this->add(session);
                     session->on_close([this](auto session) {
@@ -195,7 +240,7 @@ private:
 
             // Send the response
             http::serializer<false, http::string_body> sr{response};
-            http::async_write(socket, sr, yield[ec]);
+            http::async_write(stream, sr, yield[ec]);
             if(ec) return fail(ec, "write");
             if(!response.keep_alive())
             {
@@ -204,9 +249,20 @@ private:
                 break;
             }
         }
-        socket.shutdown(tcp::socket::shutdown_send, ec);
+
+        if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<boost::beast::tcp_stream>>)
+        {
+            stream.async_shutdown(yield[ec]);
+            if(ec)
+                return fail(ec, "shutdown");
+        }
+        else
+        {
+            stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+        }
     }
 
+    template<class StreamClass>
     void do_listen(
         boost::asio::io_context& ioc,
         tcp::endpoint endpoint,
@@ -238,13 +294,25 @@ private:
             acceptor.async_accept(socket, yield[ec]);
             if(ec)
                 fail(ec, "accept");
-            else
-                boost::asio::spawn(
-                    acceptor.get_executor(),
-                    std::bind(
-                        &WebServer::do_session, this,
-                        std::move(socket),
-                        std::placeholders::_1));
+            else {
+                if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<boost::beast::tcp_stream>>) {
+                    boost::asio::spawn(
+                        acceptor.get_executor(),
+                        std::bind(
+                            &WebServer::do_session<boost::beast::ssl_stream<boost::beast::tcp_stream>>, this,
+                            boost::beast::ssl_stream<boost::beast::tcp_stream>(std::move(socket), ctx),
+                            std::placeholders::_1));
+                }
+                else
+                {
+                    boost::asio::spawn(
+                        acceptor.get_executor(),
+                        std::bind(
+                            &WebServer::do_session<boost::beast::tcp_stream>, this,
+                            boost::beast::tcp_stream(std::move(socket)),
+                            std::placeholders::_1));
+                }
+            }
         }
     }
 
@@ -262,6 +330,7 @@ private:
     }
 
     boost::asio::io_context ioc;
+    ssl::context ctx{ssl::context::tlsv12};
     std::vector<std::thread> threads;
     detail::Registry registry_;
     mutable std::mutex mutex_;

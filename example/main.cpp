@@ -2,8 +2,9 @@
 
 int main(int, const char**)
 {
-    critter::WebServer server(8888);
-    server.serve_files("/static/", "./www/");
+    critter::WebServer server;
+    server.listen(8888);
+    server.listen(critter::SslOptions({"./cert.pem", "./key.pem"}), 8889);
     server.add_http_handler(http::verb::get, "/test/?", [](auto&& req)
     {
         return "Hello\n";
@@ -18,6 +19,7 @@ int main(int, const char**)
         // echo the message to all clients
         for(auto& session: server.get_ws_sessions()) session->send(msg);
     });
+    server.serve_files("/", "./www/");
 
     std::cout << "Server started" << std::endl; 
     server.run();

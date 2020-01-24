@@ -10,6 +10,8 @@ find_package(Boost 1.71.0 REQUIRED COMPONENTS system filesystem regex coroutine 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+find_package(OpenSSL REQUIRED)
+
 include_directories(
     ${Boost_INCLUDE_DIRS}
     ../include
@@ -17,6 +19,7 @@ include_directories(
 
 link_libraries(${Boost_LIBRARIES})
 link_libraries(Threads::Threads)
+link_libraries(${OPENSSL_LIBRARIES})
 
 add_executable(example main.cpp)
 

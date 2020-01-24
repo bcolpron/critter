@@ -75,7 +75,8 @@
 <script src="ServerConnection.js"></script>
 <script>
 $(function(){
-    var ws = new ServerConnection("ws://" + location.host + "/ws/");
+    var proto = location.protocol.startsWith("https") ? "wss" : "ws";
+    var ws = new ServerConnection(proto + "://" + location.host + "/ws/");
     ws.onMessage(function(msg) {
         console.log("message: " + msg);
 

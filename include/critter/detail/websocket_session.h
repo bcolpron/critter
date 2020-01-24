@@ -16,12 +16,13 @@ public:
     virtual void send(std::string_view msg)=0;
 };
 
-class WebSocketSessionImpl : public WebSocketSession, public std::enable_shared_from_this<WebSocketSessionImpl>
+template<class StreamClass>
+class WebSocketSessionImpl : public WebSocketSession, public std::enable_shared_from_this<WebSocketSessionImpl<StreamClass>>
 {
 public:
     template<class F>
-    WebSocketSessionImpl(tcp::socket socket, F f)
-        : ws_(std::move(socket)), on_message_(std::move(f))
+    WebSocketSessionImpl(StreamClass stream, F f)
+        : ws_(std::move(stream)), on_message_(std::move(f))
     {
     }
 
@@ -45,7 +46,7 @@ public:
         boost::asio::spawn(
             ws_.get_executor(),
             std::bind(
-                &WebSocketSessionImpl::read, shared_from_this(),
+                &WebSocketSessionImpl::read, this->shared_from_this(),
                 std::placeholders::_1)); 
     }
 
@@ -60,7 +61,7 @@ private:
     using MessageHandler = std::function<void(std::string_view, WebSocketSession&)>;
     using OnCloseHandler = std::function<void(std::shared_ptr<WebSocketSession>)>;
 
-    websocket::stream<tcp::socket> ws_;
+    websocket::stream<StreamClass> ws_;
     MessageHandler on_message_;
     OnCloseHandler on_close_ = [](auto){};
 
@@ -80,7 +81,7 @@ private:
             // Read a message into our buffer
             ws_.async_read(buffer, yield[ec]);
             if(ec) {
-                on_close_(shared_from_this());
+                on_close_(this->shared_from_this());
                 return fail(ec, "read");
             }
 
