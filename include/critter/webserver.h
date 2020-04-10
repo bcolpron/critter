@@ -6,7 +6,12 @@
 #include "detail/serve_files_handler.h"
 #include "detail/websocket_session.h"
 #include <boost/beast/websocket.hpp>
-#include <boost/beast/ssl.hpp>
+#if BOOST_VERSION < 107000
+#   include <boost/beast/experimental/core/ssl_stream.hpp>
+#else
+#   include <boost/beast/ssl.hpp>
+#endif
+#include <boost/asio/ssl.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/system/system_error.hpp>
@@ -69,7 +74,7 @@ public:
         auto const address = boost::asio::ip::address::from_string("::");
         boost::asio::spawn(ioc,
             std::bind(
-                &WebServer::do_listen<boost::beast::tcp_stream>, this,
+                &WebServer::do_listen<tcp::socket>, this,
                 std::ref(ioc),
                 tcp::endpoint{address, port},
                 std::placeholders::_1));
@@ -87,7 +92,7 @@ public:
         auto const address = boost::asio::ip::address::from_string("::");
         boost::asio::spawn(ioc,
             std::bind(
-                &WebServer::do_listen<boost::beast::ssl_stream<boost::beast::tcp_stream>>, this,
+                &WebServer::do_listen<boost::beast::ssl_stream<tcp::socket>>, this,
                 std::ref(ioc),
                 tcp::endpoint{address, port},
                 std::placeholders::_1));
@@ -187,7 +192,7 @@ private:
         boost::system::error_code ec;
         boost::beast::flat_buffer buffer;
 
-        if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<boost::beast::tcp_stream>>)
+        if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<tcp::socket>>)
         {
             // Perform the SSL handshake
             stream.async_handshake(ssl::stream_base::server, yield[ec]);
@@ -250,7 +255,7 @@ private:
             }
         }
 
-        if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<boost::beast::tcp_stream>>)
+        if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<tcp::socket>>)
         {
             stream.async_shutdown(yield[ec]);
             if(ec)
@@ -258,7 +263,7 @@ private:
         }
         else
         {
-            stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+            stream.shutdown(tcp::socket::shutdown_send, ec);
         }
     }
 
@@ -295,12 +300,12 @@ private:
             if(ec)
                 fail(ec, "accept");
             else {
-                if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<boost::beast::tcp_stream>>) {
+                if constexpr (std::is_same_v<StreamClass, boost::beast::ssl_stream<tcp::socket>>) {
                     boost::asio::spawn(
                         acceptor.get_executor(),
                         std::bind(
-                            &WebServer::do_session<boost::beast::ssl_stream<boost::beast::tcp_stream>>, this,
-                            boost::beast::ssl_stream<boost::beast::tcp_stream>(std::move(socket), ctx),
+                            &WebServer::do_session<boost::beast::ssl_stream<tcp::socket>>, this,
+                            boost::beast::ssl_stream<tcp::socket>(std::move(socket), ctx),
                             std::placeholders::_1));
                 }
                 else
@@ -308,8 +313,8 @@ private:
                     boost::asio::spawn(
                         acceptor.get_executor(),
                         std::bind(
-                            &WebServer::do_session<boost::beast::tcp_stream>, this,
-                            boost::beast::tcp_stream(std::move(socket)),
+                            &WebServer::do_session<tcp::socket>, this,
+                            tcp::socket(std::move(socket)),
                             std::placeholders::_1));
                 }
             }
